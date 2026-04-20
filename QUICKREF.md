@@ -74,9 +74,8 @@ MediaPipeDetector.detect()
   ↓
 FeatureExtractor.extract()
   ├→ 提取姿态特征 (132维)
-  ├→ 提取面部特征 (1404维)
-  ├→ 提取手部特征 (126维)
-  └→ 计算几何特征 (6维)
+  ├→ 提取单手特征 (63维)
+  └→ 计算几何特征 (5维)
   ↓
 GestureClassifier.predict()
   ├→ 序列长度检查

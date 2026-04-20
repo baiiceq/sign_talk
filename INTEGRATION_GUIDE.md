@@ -23,6 +23,38 @@ cp /path/to/nd_model11.keras models/gesture_model.keras
 # 可从 code.ipynb 中的数据收集单元提取
 ```
 
+推荐直接使用仓库内的采集脚本：
+
+```bash
+python scripts/collect_dataset.py \
+  --labels left_swipe,right_swipe,up_swipe,down_swipe,fist_click,open_palm,thumb_up,thumb_down,ok_sign,peace \
+  --sequences-per-label 400 \
+  --sequence-length 30
+```
+
+推荐标签清单（单手）：
+- `left_swipe`
+- `right_swipe`
+- `up_swipe`
+- `down_swipe`
+- `fist_click`
+- `open_palm`
+- `thumb_up`
+- `thumb_down`
+- `ok_sign`
+- `peace`
+
+数据量建议（每个标签，单手）：
+- 最低可用：`>=300` 条序列
+- 推荐上线：`400~800` 条序列
+- 高鲁棒版本：`1000` 条序列
+
+时间预估（10 个标签，30 帧/序列，20FPS）：
+- `400` 条/标签：约 `110~140` 分钟（1.8~2.3 小时）
+- `800` 条/标签：约 `220~280` 分钟（3.7~4.7 小时）
+
+脚本会在启动时自动打印当前参数下的总耗时估算。
+
 ### 3. 测试系统
 
 ```bash

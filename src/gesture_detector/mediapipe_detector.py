@@ -1,142 +1,127 @@
 """
-MediaPipe 手部/身体检测模块
-从原 code.ipynb 的 Cell 3 和 Cell 5 提取
+MediaPipe 身体/手部检测模块
+单手版本：仅追踪一只手（不使用面部）
 """
 
 import cv2
 import mediapipe as mp
 import logging
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
 
 class MediaPipeDetector:
-    """
-    使用 MediaPipe 进行手部和身体关键点检测
-    """
+    """使用 MediaPipe 进行身体 + 单手关键点检测"""
 
     def __init__(self, min_detection_confidence=0.55, min_tracking_confidence=0.55):
-        """
-        初始化 MediaPipe 检测器
-
-        Args:
-            min_detection_confidence (float): 最小检测置信度
-            min_tracking_confidence (float): 最小跟踪置信度
-        """
-        self.mp_holistic = mp.solutions.holistic
+        self.mp_pose = mp.solutions.pose
+        self.mp_hands = mp.solutions.hands
         self.mp_drawing = mp.solutions.drawing_utils
-        self.min_detection_confidence = min_detection_confidence
-        self.min_tracking_confidence = min_tracking_confidence
 
-        # 创建 Holistic 对象
-        self.holistic = self.mp_holistic.Holistic(
+        self.pose = self.mp_pose.Pose(
             min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence
+            min_tracking_confidence=min_tracking_confidence,
+        )
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=1,
+            min_detection_confidence=min_detection_confidence,
+            min_tracking_confidence=min_tracking_confidence,
         )
 
+    def _pick_active_hand(self, hands_results):
+        if not hands_results.multi_hand_landmarks:
+            return None, "unknown"
+
+        active_hand_landmarks = hands_results.multi_hand_landmarks[0]
+        hand_label = "unknown"
+
+        if hands_results.multi_handedness:
+            hand_label = hands_results.multi_handedness[0].classification[0].label.lower()
+
+        return active_hand_landmarks, hand_label
+
     def detect(self, image):
-        """
-        对输入图像进行手部和身体检测
-
-        Args:
-            image: OpenCV 格式的图像 (BGR)
-
-        Returns:
-            image: 处理后的图像
-            results: MediaPipe 检测结果
-        """
-        # 颜色空间转换：BGR -> RGB
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_rgb.flags.writeable = False
 
-        # 进行检测
-        results = self.holistic.process(image_rgb)
+        pose_results = self.pose.process(image_rgb)
+        hands_results = self.hands.process(image_rgb)
 
-        # 恢复可写状态
         image_rgb.flags.writeable = True
-
-        # 颜色空间转换：RGB -> BGR
         image = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+        active_hand_landmarks, active_hand_label = self._pick_active_hand(hands_results)
+
+        # 兼容字段：left/right 仅保留一个槽位
+        if active_hand_label == "left":
+            left_hand_landmarks = active_hand_landmarks
+            right_hand_landmarks = None
+        elif active_hand_label == "right":
+            left_hand_landmarks = None
+            right_hand_landmarks = active_hand_landmarks
+        else:
+            left_hand_landmarks = active_hand_landmarks
+            right_hand_landmarks = None
+
+        results = SimpleNamespace(
+            pose_landmarks=pose_results.pose_landmarks,
+            active_hand_landmarks=active_hand_landmarks,
+            active_hand_label=active_hand_label,
+            left_hand_landmarks=left_hand_landmarks,
+            right_hand_landmarks=right_hand_landmarks,
+        )
 
         return image, results
 
     def draw_landmarks(self, image, results, use_styled=True):
-        """
-        在图像上绘制检测到的关键点
-
-        Args:
-            image: 输入图像
-            results: MediaPipe 检测结果
-            use_styled (bool): 是否使用风格化绘制
-        """
         if use_styled:
             self._draw_styled_landmarks(image, results)
         else:
             self._draw_simple_landmarks(image, results)
 
     def _draw_simple_landmarks(self, image, results):
-        """
-        简单绘制关键点连接线 (原 code.ipynb Cell 4)
-        """
         self.mp_drawing.draw_landmarks(
-            image, results.face_landmarks, self.mp_holistic.FACEMESH_TESSELATION
+            image, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS
         )
         self.mp_drawing.draw_landmarks(
-            image, results.pose_landmarks, self.mp_holistic.POSE_CONNECTIONS
-        )
-        self.mp_drawing.draw_landmarks(
-            image, results.left_hand_landmarks, self.mp_holistic.HAND_CONNECTIONS
-        )
-        self.mp_drawing.draw_landmarks(
-            image, results.right_hand_landmarks, self.mp_holistic.HAND_CONNECTIONS
+            image, results.active_hand_landmarks, self.mp_hands.HAND_CONNECTIONS
         )
 
     def _draw_styled_landmarks(self, image, results):
-        """
-        风格化绘制关键点 (原 code.ipynb Cell 5)
-        带有自定义颜色和厚度
-        """
-        # 绘制面部关键点 (绿色)
-        self.mp_drawing.draw_landmarks(
-            image,
-            results.face_landmarks,
-            self.mp_holistic.FACEMESH_TESSELATION,
-            self.mp_drawing.DrawingSpec(color=(80, 110, 10), thickness=1, circle_radius=1),
-            self.mp_drawing.DrawingSpec(color=(80, 256, 121), thickness=1, circle_radius=1),
-        )
-
-        # 绘制身体关键点 (红色)
         self.mp_drawing.draw_landmarks(
             image,
             results.pose_landmarks,
-            self.mp_holistic.POSE_CONNECTIONS,
+            self.mp_pose.POSE_CONNECTIONS,
             self.mp_drawing.DrawingSpec(color=(80, 22, 10), thickness=2, circle_radius=4),
             self.mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2),
         )
 
-        # 绘制左手关键点 (紫色)
         self.mp_drawing.draw_landmarks(
             image,
-            results.left_hand_landmarks,
-            self.mp_holistic.HAND_CONNECTIONS,
+            results.active_hand_landmarks,
+            self.mp_hands.HAND_CONNECTIONS,
             self.mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
             self.mp_drawing.DrawingSpec(color=(121, 44, 250), thickness=2, circle_radius=2),
         )
 
-        # 绘制右手关键点 (橙色)
-        self.mp_drawing.draw_landmarks(
+        label = getattr(results, "active_hand_label", "unknown").upper()
+        cv2.putText(
             image,
-            results.right_hand_landmarks,
-            self.mp_holistic.HAND_CONNECTIONS,
-            self.mp_drawing.DrawingSpec(color=(245, 117, 66), thickness=2, circle_radius=4),
-            self.mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2),
+            f"Hand: {label}",
+            (10, 120),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 0),
+            2,
         )
 
     def release(self):
-        """释放资源"""
-        if self.holistic:
-            self.holistic.close()
+        if self.pose:
+            self.pose.close()
+        if self.hands:
+            self.hands.close()
 
     def __del__(self):
-        """析构函数，自动释放资源"""
         self.release()
