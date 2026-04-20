@@ -1,0 +1,80 @@
+# 默认配置文件
+# 手势识别与交互控制系统配置
+
+# ==================== 模型配置 ====================
+model:
+  path: 'models/gesture_model.keras'          # 模型文件路径
+  sequence_length: 30                         # 单个序列的帧数
+  confidence_threshold: 0.90                  # 预测置信度阈值
+  actions:                                    # 支持的手势列表
+    - 'chhan'
+    - 'dhanyawad'
+    - 'ghar'
+    - 'ho'
+    - 'i_love_you'
+    - 'jevan'
+    - 'nahi'
+    - 'namaskar'
+    - 'pani'
+    - 'sorry'
+
+# ==================== 摄像头配置 ====================
+camera:
+  device_id: 0                                # 摄像头设备ID (0为默认)
+  frame_width: 640                            # 画面宽度
+  frame_height: 480                           # 画面高度
+  fps: 30                                     # 目标帧率
+
+# ==================== MediaPipe 配置 ====================
+mediapipe:
+  min_detection_confidence: 0.55              # 最小检测置信度
+  min_tracking_confidence: 0.55               # 最小跟踪置信度
+  draw_landmarks: true                        # 是否绘制关键点
+  use_styled_drawing: true                    # 是否使用风格化绘制
+
+# ==================== 手势识别配置 ====================
+recognition:
+  min_sequence_length: 10                     # 最小序列长度 (帧数)
+  max_sequence_length: 30                     # 最大序列长度
+  motion_threshold: 0.01                      # 动作检测阈值 (关键点变化量)
+  pause_time: 2.0                             # 识别后的暂停时间 (秒)
+  smoothing_window: 5                         # 平滑处理窗口大小
+
+# ==================== 控制配置 ====================
+control:
+  mouse_speed: 1.0                            # 鼠标移动速度倍数
+  keyboard_interval: 0.05                     # 键盘输入间隔 (秒)
+  enable_mouse: true                          # 是否启用鼠标控制
+  enable_keyboard: true                       # 是否启用键盘控制
+
+# ==================== 显示配置 ====================
+display:
+  show_frame: true                            # 是否显示摄像头画面
+  show_fps: true                              # 是否显示FPS
+  show_confidence: true                       # 是否显示置信度
+  show_gesture_history: true                  # 是否显示手势历史
+  max_history_count: 5                        # 最多显示的历史手势数量
+
+# ==================== 日志配置 ====================
+logging:
+  level: 'INFO'                               # 日志级别 (DEBUG, INFO, WARNING, ERROR)
+  file: 'logs/gesture_control.log'            # 日志文件路径
+  console_output: true                        # 是否输出到控制台
+
+# ==================== 手势命令映射 ====================
+gesture_commands:
+  # 鼠标控制
+  left_swipe: 'left_swipe'
+  right_swipe: 'right_swipe'
+  up_swipe: 'up_swipe'
+  down_swipe: 'down_swipe'
+  
+  # 点击操作
+  fist: 'left_click'
+  open_hand: 'right_click'
+  peace: 'double_click'
+  
+  # 键盘操作
+  thumb_up: 'copy'
+  thumb_down: 'paste'
+  ok_sign: 'save'

@@ -1,0 +1,5 @@
+# 将训练好的模型放在此目录
+# Place your trained models here
+
+# 示例模型文件：gesture_model.keras
+# Example model file: gesture_model.keras
