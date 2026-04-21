@@ -44,9 +44,6 @@ logs/
 
 # Data and models
 *.npy
-*.h5
-*.keras
-*.pb
 data/gestures/
 !models/.gitkeep
 

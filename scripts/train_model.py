@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=str, default="models", help="模型输出目录")
     parser.add_argument("--model-name", type=str, default="gesture_model", help="模型名称前缀")
     parser.add_argument("--sequence-length", type=int, default=30, help="序列长度")
-    parser.add_argument("--feature-dim", type=int, default=200, help="特征维度")
+    parser.add_argument("--feature-dim", type=int, default=68, help="特征维度")
     parser.add_argument("--hidden-dim", type=int, default=128, help="LSTM 隐层维度")
     parser.add_argument("--num-layers", type=int, default=2, help="LSTM 层数")
     parser.add_argument("--dropout", type=float, default=0.2, help="Dropout")

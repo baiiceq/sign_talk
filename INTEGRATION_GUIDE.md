@@ -291,3 +291,7 @@ recognition:
 ## 支持
 
 有问题？请查看 README.md 或提交 Issue。
+
+
+
+python scripts/collect_dataset.py --labels left_swipe --sequences-per-label 400 --sequence-length 30

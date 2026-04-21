@@ -19,6 +19,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.gesture_detector import MediaPipeDetector, FeatureExtractor
 
 
@@ -47,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-seconds", type=float, default=2.0, help="每个标签开始前倒计时")
     parser.add_argument("--rest-seconds", type=float, default=0.3, help="每条序列采集后的短暂停顿")
     parser.add_argument("--strict-single-hand", action="store_true", help="启用后：仅在检测到一只手时才计入帧")
+    parser.add_argument("--display-interval", type=int, default=30, help="显示更新间隔帧数（提高性能）")
     return parser.parse_args()
 
 
@@ -118,7 +122,7 @@ def main() -> None:
     manifest_path = output_dir / "manifest.csv"
     write_header = not manifest_path.exists()
 
-    detector = MediaPipeDetector()
+    detector = MediaPipeDetector(min_detection_confidence=0.3, min_tracking_confidence=0.3)
     extractor = FeatureExtractor()
 
     cap = cv2.VideoCapture(args.camera_id)
@@ -127,6 +131,10 @@ def main() -> None:
 
     total_saved = 0
     start_time = time.time()
+
+    # 收集所有序列数据到内存
+    all_sequences = []
+    all_metadata = []
 
     with manifest_path.open("a", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
@@ -149,6 +157,7 @@ def main() -> None:
                         raise KeyboardInterrupt
 
                 collected = 0
+                display_counter = 0  # 用于控制显示频率
                 while collected < args.sequences_per_label:
                     sequence = []
                     frame_idx = 0
@@ -161,7 +170,6 @@ def main() -> None:
 
                         frame = cv2.flip(frame, 1)
                         image, results = detector.detect(frame)
-                        detector.draw_landmarks(image, results, use_styled=True)
 
                         has_active_hand = results.active_hand_landmarks is not None
                         status = f"Active hand: {getattr(results, 'active_hand_label', 'unknown')}"
@@ -174,8 +182,11 @@ def main() -> None:
                             frame_idx += 1
                             hand_label_of_sequence = getattr(results, "active_hand_label", "unknown")
 
-                        draw_hud(image, label, collected + 1, args.sequences_per_label, frame_idx, args.sequence_length, status)
-                        cv2.imshow("Single-Hand Dataset Collector", image)
+                        # 根据间隔显示
+                        display_counter += 1
+                        if display_counter % args.display_interval == 0:
+                            draw_hud(image, label, collected + 1, args.sequences_per_label, frame_idx, args.sequence_length, status)
+                            cv2.imshow("Single-Hand Dataset Collector", image)
 
                         if cv2.waitKey(1) & 0xFF == ord("q"):
                             raise KeyboardInterrupt
@@ -183,9 +194,10 @@ def main() -> None:
                     seq_array = np.array(sequence, dtype=np.float32)
                     sequence_id = f"{label}_{int(time.time() * 1000)}_{collected:04d}"
                     file_path = label_dir / f"{sequence_id}.npy"
-                    np.save(file_path, seq_array)
 
-                    writer.writerow([
+                    # 收集到内存而不是立即保存
+                    all_sequences.append((file_path, seq_array))
+                    all_metadata.append([
                         label,
                         sequence_id,
                         seq_array.shape[0],
@@ -194,11 +206,10 @@ def main() -> None:
                         str(file_path.as_posix()),
                         time.strftime("%Y-%m-%d %H:%M:%S"),
                     ])
-                    csvfile.flush()
 
                     collected += 1
                     total_saved += 1
-                    print(f"[{label}] {collected}/{args.sequences_per_label} saved: {file_path.name}")
+                    print(f"[{label}] {collected}/{args.sequences_per_label} saved: {sequence_id}")
 
                     if args.rest_seconds > 0:
                         time.sleep(args.rest_seconds)
@@ -209,6 +220,16 @@ def main() -> None:
             detector.release()
             cap.release()
             cv2.destroyAllWindows()
+
+    # 批量保存所有序列到磁盘
+    print("批量保存序列到磁盘...")
+    for file_path, seq_array in all_sequences:
+        np.save(file_path, seq_array)
+
+    # 批量写入metadata
+    with manifest_path.open("a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(all_metadata)
 
     elapsed = (time.time() - start_time) / 60.0
     print("=" * 72)

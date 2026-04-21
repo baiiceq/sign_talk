@@ -79,6 +79,12 @@ class GestureControlSystem:
         self.last_detected_time = 0
         self.frame_count = 0
         self.fps_time = time.time()
+        
+        # 手势检测变量
+        self.gesture_active = False
+        self.gesture_frames = []
+        self.static_gesture_counter = 0
+        self.last_prediction = None
 
         self.logger.info("系统初始化完成")
 
@@ -105,56 +111,105 @@ class GestureControlSystem:
         # 提取特征
         current_landmarks = self.extractor.extract(results)
 
-        # 动作检测：如果动作变化不足，跳过处理
+        # 手势开始/结束检测
         motion_threshold = self.config.get('recognition.motion_threshold', 0.01)
-        if self.previous_landmarks is not None:
-            landmark_diff = np.abs(current_landmarks - self.previous_landmarks).sum()
-            if landmark_diff < motion_threshold:
-                self.previous_landmarks = current_landmarks
-                return image, None
+        gesture_start_threshold = self.config.get('recognition.gesture_start_threshold', 0.05)
+        gesture_end_threshold = self.config.get('recognition.gesture_end_threshold', 0.02)
+        min_gesture_frames = self.config.get('recognition.min_gesture_frames', 10)
+        static_gesture_timeout = self.config.get('recognition.static_gesture_timeout', 60)  # 静态手势超时帧数
+
+        # 检测是否有手存在
+        has_hand = results.active_hand_landmarks is not None
+        
+        if has_hand:
+            # 如果之前没有手，开始新序列
+            if not self.gesture_active:
+                self.gesture_active = True
+                self.gesture_frames = []
+                self.static_gesture_counter = 0
+                self.last_prediction = None
+                self.logger.info("检测到手，开始手势收集")
+            
+            # 收集当前帧
+            self.gesture_frames.append(current_landmarks)
+            
+            # 保持最大长度
+            max_len = self.config.get('recognition.max_sequence_length', 30)
+            if len(self.gesture_frames) > max_len:
+                self.gesture_frames = self.gesture_frames[-max_len:]
+            
+            # 当序列足够长时，进行实时预测
+            if len(self.gesture_frames) >= min_gesture_frames:
+                gesture_pred, confidence, _ = self.classifier.predict(np.array(self.gesture_frames))
+                
+                if gesture_pred and confidence > self.config.get('model.confidence_threshold', 0.90):
+                    # 如果预测结果稳定，计数器增加
+                    if gesture_pred == self.last_prediction:
+                        self.static_gesture_counter += 1
+                    else:
+                        self.static_gesture_counter = 1
+                        self.last_prediction = gesture_pred
+                    
+                    # 如果连续预测到相同手势足够次数，触发
+                    stable_threshold = self.config.get('recognition.stable_prediction_count', 5)
+                    if self.static_gesture_counter >= stable_threshold:
+                        self.gesture_history.append(gesture_pred)
+                        self.logger.info(f"识别到静态手势: {gesture_pred}")
+                        self.gesture_active = False
+                        self.gesture_frames = []
+                        self.static_gesture_counter = 0
+                        self.last_prediction = None
+                        return image, gesture_pred
+                else:
+                    # 重置计数器如果预测不稳定
+                    self.static_gesture_counter = 0
+                    self.last_prediction = None
+            
+            # 超时检查：如果太久没有识别到手势，重置
+            if len(self.gesture_frames) > static_gesture_timeout:
+                self.gesture_active = False
+                self.gesture_frames = []
+                self.static_gesture_counter = 0
+                self.last_prediction = None
+        else:
+            # 没有手时，重置状态
+            if self.gesture_active:
+                self.gesture_active = False
+                self.gesture_frames = []
+                self.static_gesture_counter = 0
+                self.last_prediction = None
 
         self.previous_landmarks = current_landmarks
+        return image, None
 
-        # 检查暂停期
-        current_time = time.time()
-        pause_time = self.config.get('recognition.pause_time', 2.0)
-        if current_time - self.last_detected_time < pause_time:
-            return image, None
+    def process_gesture_sequence(self, gesture_frames):
+        """
+        处理检测到的手势序列
 
-        # 构建序列
-        self.sequence.append(current_landmarks)
-        max_seq_len = self.config.get('recognition.max_sequence_length', 30)
-        if len(self.sequence) > max_seq_len:
-            self.sequence = self.sequence[-max_seq_len:]
+        Args:
+            gesture_frames: 手势帧列表
 
-        # 执行预测
-        min_seq_len = self.config.get('recognition.min_sequence_length', 10)
-        gesture = None
-
-        if len(self.sequence) >= min_seq_len:
-            gesture_pred, confidence, _ = self.classifier.predict(self.sequence)
-
-            if gesture_pred:
-                self.predictions.append(gesture_pred)
-
-                # 检查是否识别完整手势
-                if len(self.predictions) >= min_seq_len:
-                    most_common = max(
-                        set(self.predictions[-min_seq_len:]),
-                        key=self.predictions[-min_seq_len:].count,
-                    )
-                    count = self.predictions[-min_seq_len:].count(most_common)
-                    threshold_count = int(min_seq_len * self.config.get('model.confidence_threshold', 0.90))
-
-                    if count >= threshold_count:
-                        gesture = most_common
-                        self.gesture_history.append(gesture)
-                        self.sequence = []
-                        self.predictions = []
-                        self.last_detected_time = current_time
-                        self.logger.info(f"识别到手势: {gesture}")
-
-        return image, gesture
+        Returns:
+            gesture: 识别到的手势或None
+        """
+        if len(gesture_frames) < 10:
+            return None
+            
+        # 填充到固定长度
+        sequence = gesture_frames[:30]  # 取前30帧
+        if len(sequence) < 30:
+            # 重复最后一帧填充
+            last_frame = sequence[-1]
+            while len(sequence) < 30:
+                sequence.append(last_frame)
+        
+        sequence_array = np.array(sequence)
+        
+        # 使用分类器预测
+        gesture_pred, confidence, _ = self.classifier.predict(sequence_array)
+        
+        self.previous_landmarks = current_landmarks
+        return image, None
 
     def draw_info(self, frame, gesture=None):
         """

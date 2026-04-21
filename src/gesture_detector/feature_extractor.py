@@ -1,6 +1,6 @@
 """
 关键点特征提取模块
-单手版本：仅提取 pose + active hand（不含面部）
+单手版本：仅提取 active hand + 几何特征（不含姿态和面部）
 """
 
 import numpy as np
@@ -13,22 +13,18 @@ logger = logging.getLogger(__name__)
 class FeatureExtractor:
     """
     从 MediaPipe 检测结果中提取特征向量
-    包含：姿态、单手关键点及几何特征
+    包含：单手关键点及几何特征
     """
 
-    POSE_DIM = 33 * 4  # 132
     HAND_DIM = 21 * 3  # 63
     GEOMETRIC_FEATURES_DIM = 5  # 单手几何 + handedness flag
 
     def __init__(self):
-        self.feature_dim = self.POSE_DIM + self.HAND_DIM + self.GEOMETRIC_FEATURES_DIM
+        self.feature_dim = self.HAND_DIM + self.GEOMETRIC_FEATURES_DIM
         logger.info(f"特征向量维度(单手): {self.feature_dim}")
 
     def extract(self, results):
         keypoints = []
-
-        pose = self._extract_pose(results)
-        keypoints.extend(pose)
 
         hand = self._extract_active_hand(results)
         keypoints.extend(hand)
@@ -37,13 +33,6 @@ class FeatureExtractor:
         keypoints.extend(geometric)
 
         return np.array(keypoints)
-
-    def _extract_pose(self, results):
-        if results.pose_landmarks:
-            return np.array(
-                [[res.x, res.y, res.z, res.visibility] for res in results.pose_landmarks.landmark]
-            ).flatten()
-        return np.zeros(self.POSE_DIM)
 
     def _extract_active_hand(self, results):
         active = getattr(results, "active_hand_landmarks", None)

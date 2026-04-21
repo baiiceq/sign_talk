@@ -1,6 +1,6 @@
 """
-MediaPipe 身体/手部检测模块
-单手版本：仅追踪一只手（不使用面部）
+MediaPipe 单手检测模块
+仅检测单手关键点，不含姿态
 """
 
 import cv2
@@ -12,17 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class MediaPipeDetector:
-    """使用 MediaPipe 进行身体 + 单手关键点检测"""
+    """使用 MediaPipe 进行单手关键点检测"""
 
     def __init__(self, min_detection_confidence=0.55, min_tracking_confidence=0.55):
-        self.mp_pose = mp.solutions.pose
         self.mp_hands = mp.solutions.hands
         self.mp_drawing = mp.solutions.drawing_utils
 
-        self.pose = self.mp_pose.Pose(
-            min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence,
-        )
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
@@ -46,7 +41,6 @@ class MediaPipeDetector:
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_rgb.flags.writeable = False
 
-        pose_results = self.pose.process(image_rgb)
         hands_results = self.hands.process(image_rgb)
 
         image_rgb.flags.writeable = True
@@ -66,7 +60,7 @@ class MediaPipeDetector:
             right_hand_landmarks = None
 
         results = SimpleNamespace(
-            pose_landmarks=pose_results.pose_landmarks,
+            pose_landmarks=None,  # 不再使用pose
             active_hand_landmarks=active_hand_landmarks,
             active_hand_label=active_hand_label,
             left_hand_landmarks=left_hand_landmarks,
@@ -83,21 +77,10 @@ class MediaPipeDetector:
 
     def _draw_simple_landmarks(self, image, results):
         self.mp_drawing.draw_landmarks(
-            image, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS
-        )
-        self.mp_drawing.draw_landmarks(
             image, results.active_hand_landmarks, self.mp_hands.HAND_CONNECTIONS
         )
 
     def _draw_styled_landmarks(self, image, results):
-        self.mp_drawing.draw_landmarks(
-            image,
-            results.pose_landmarks,
-            self.mp_pose.POSE_CONNECTIONS,
-            self.mp_drawing.DrawingSpec(color=(80, 22, 10), thickness=2, circle_radius=4),
-            self.mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2),
-        )
-
         self.mp_drawing.draw_landmarks(
             image,
             results.active_hand_landmarks,
@@ -118,8 +101,6 @@ class MediaPipeDetector:
         )
 
     def release(self):
-        if self.pose:
-            self.pose.close()
         if self.hands:
             self.hands.close()
 

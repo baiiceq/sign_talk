@@ -39,6 +39,11 @@ recognition:
   motion_threshold: 0.01                      # 动作检测阈值 (关键点变化量)
   pause_time: 2.0                             # 识别后的暂停时间 (秒)
   smoothing_window: 5                         # 平滑处理窗口大小
+  gesture_start_threshold: 0.05               # 手势开始运动阈值
+  gesture_end_threshold: 0.02                 # 手势结束静止阈值
+  min_gesture_frames: 10                      # 最少手势帧数
+  static_gesture_timeout: 60                  # 静态手势超时帧数
+  stable_prediction_count: 5                  # 稳定预测计数阈值
 
 # ==================== 控制配置 ====================
 control:
