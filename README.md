@@ -49,7 +49,7 @@
                  ▼
 ┌─────────────────────────────────────────┐
 │    MediaPipe 检测器                      │
-│  (身体、手部、面部关键点)                 │
+│  (身体、手部关键点)                       │
 └────────────────┬────────────────────────┘
                  │
                  ▼
@@ -110,7 +110,20 @@ pip install -r requirements.txt
 将训练好的 BiLSTM 模型放在 `models/` 目录：
 
 ```bash
-cp path/to/gesture_model.keras models/
+cp path/to/gesture_model.pt models/
+```
+
+如果你已经采集好了数据（`data/gestures/<label>/*.npy`），可直接训练：
+
+```bash
+python scripts/train_model.py \
+  --data-dir data/gestures \
+  --output-dir models \
+  --model-name gesture_model \
+  --sequence-length 30 \
+  --feature-dim 200 \
+  --epochs 40 \
+  --batch-size 64
 ```
 
 ## 🎯 快速开始
@@ -137,7 +150,7 @@ python main.py --config my_config.yaml
 
 ```yaml
 model:
-  path: 'models/gesture_model.keras'
+  path: 'models/gesture_model.pt'
   sequence_length: 30                    # 单个序列的帧数
   confidence_threshold: 0.90             # 预测置信度阈值
 ```
@@ -200,7 +213,7 @@ gesture-recognition-control-system/
 │   └── __init__.py
 │
 ├── models/                             # 模型存放目录
-│   └── gesture_model.keras             # 训练好的模型
+│   └── gesture_model.pt             # 训练好的模型
 │
 ├── data/                               # 数据目录
 │   ├── gestures/                       # 手势样本数据
@@ -263,7 +276,7 @@ detector = MediaPipeDetector(
 
 ## 📊 性能优化建议
 
-- 使用 GPU 加速 (配置 TensorFlow GPU)
+- 使用 GPU 加速 (配置 PyTorch CUDA)
 - 调整 `motion_threshold` 提高识别速度
 - 减少 `sequence_length` 加快响应
 - 增加 `pause_time` 减少误触发
@@ -312,7 +325,7 @@ A: 检查 `control.enable_mouse/keyboard` 是否启用
 pip install -r requirements.txt
 
 # 2. 准备模型文件
-cp /path/to/model models/gesture_model.keras
+cp /path/to/model models/gesture_model.pt
 
 # 3. 运行程序
 python main.py

@@ -4,10 +4,47 @@
 """
 
 import numpy as np
-from tensorflow.keras.models import load_model
 import logging
+import torch
+import torch.nn as nn
 
 logger = logging.getLogger(__name__)
+
+
+class BiLSTMClassifier(nn.Module):
+    """用于推理的 BiLSTM 分类网络定义。"""
+
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        num_layers,
+        num_classes,
+        dropout=0.2,
+        bidirectional=True,
+    ):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+            bidirectional=bidirectional,
+        )
+        direction_scale = 2 if bidirectional else 1
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_dim * direction_scale, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes),
+        )
+
+    def forward(self, x):
+        output, _ = self.lstm(x)
+        last_timestep = output[:, -1, :]
+        logits = self.classifier(last_timestep)
+        return logits
 
 
 class GestureClassifier:
@@ -21,7 +58,7 @@ class GestureClassifier:
         初始化手势分类器
 
         Args:
-            model_path (str): 模型文件路径 (.keras 格式)
+            model_path (str): 模型文件路径 (.pt 格式)
             actions (list): 动作名称列表
             sequence_length (int): 序列长度 (帧数)
             confidence_threshold (float): 置信度阈值 (0-1)
@@ -31,14 +68,68 @@ class GestureClassifier:
         self.sequence_length = sequence_length
         self.confidence_threshold = confidence_threshold
 
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.is_torchscript = False
+        self.model = None
+
         # 加载模型
         try:
-            self.model = load_model(model_path)
-            logger.info(f"成功加载模型: {model_path}")
+            self.model = self._load_pytorch_model(model_path)
+            self.model.eval()
+            self.model.to(self.device)
+
+            logger.info(f"成功加载 PyTorch 模型: {model_path}")
+            logger.info(f"运行设备: {self.device}")
             logger.info(f"支持的手势: {', '.join(actions)}")
         except Exception as e:
             logger.error(f"模型加载失败: {e}")
             raise
+
+    def _load_pytorch_model(self, model_path):
+        """加载 PyTorch 模型，兼容 TorchScript 与 checkpoint。"""
+        # 优先尝试加载 TorchScript，便于跨环境部署
+        try:
+            model = torch.jit.load(model_path, map_location=self.device)
+            self.is_torchscript = True
+            logger.info("检测到 TorchScript 模型")
+            return model
+        except Exception:
+            self.is_torchscript = False
+
+        checkpoint = torch.load(model_path, map_location=self.device)
+
+        if isinstance(checkpoint, nn.Module):
+            logger.info("检测到完整 nn.Module 模型")
+            return checkpoint
+
+        if not isinstance(checkpoint, dict):
+            raise ValueError("不支持的 .pt 格式，请使用 TorchScript 或 checkpoint(dict)")
+
+        model_state_dict = checkpoint.get('model_state_dict')
+        if model_state_dict is None:
+            raise ValueError("checkpoint 缺少 model_state_dict")
+
+        input_dim = checkpoint.get('input_dim')
+        hidden_dim = checkpoint.get('hidden_dim', 128)
+        num_layers = checkpoint.get('num_layers', 2)
+        num_classes = checkpoint.get('num_classes', len(self.actions))
+        dropout = checkpoint.get('dropout', 0.2)
+        bidirectional = checkpoint.get('bidirectional', True)
+
+        if input_dim is None:
+            raise ValueError("checkpoint 缺少 input_dim，无法重建 BiLSTM 结构")
+
+        model = BiLSTMClassifier(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            num_classes=num_classes,
+            dropout=dropout,
+            bidirectional=bidirectional,
+        )
+        model.load_state_dict(model_state_dict)
+        logger.info("检测到 checkpoint(dict) 模型")
+        return model
 
     def predict(self, sequence):
         """
@@ -61,7 +152,11 @@ class GestureClassifier:
 
         # 预测
         try:
-            predictions = self.model.predict(sequence_array, verbose=0)[0]
+            with torch.no_grad():
+                inputs = torch.tensor(sequence_array, dtype=torch.float32, device=self.device)
+                logits = self.model(inputs)
+                probs = torch.softmax(logits, dim=1)
+                predictions = probs.squeeze(0).detach().cpu().numpy()
             predicted_idx = np.argmax(predictions)
             confidence = predictions[predicted_idx]
 
@@ -134,6 +229,7 @@ class GestureClassifier:
         """获取模型信息"""
         return {
             "model_path": self.model_path,
+            "framework": "pytorch",
             "num_gestures": len(self.actions),
             "sequence_length": self.sequence_length,
             "confidence_threshold": self.confidence_threshold,

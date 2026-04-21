@@ -74,9 +74,8 @@ MediaPipeDetector.detect()
   ↓
 FeatureExtractor.extract()
   ├→ 提取姿态特征 (132维)
-  ├→ 提取面部特征 (1404维)
-  ├→ 提取手部特征 (126维)
-  └→ 计算几何特征 (6维)
+  ├→ 提取单手特征 (63维)
+  └→ 计算几何特征 (5维)
   ↓
 GestureClassifier.predict()
   ├→ 序列长度检查
@@ -88,6 +87,25 @@ CommandExecutor.execute()
   ├→ 键盘控制
   └→ 系统命令
 ```
+
+### 数据采集完成后的下一步（直接执行）
+
+```bash
+python scripts/train_model.py \
+  --data-dir data/gestures \
+  --output-dir models \
+  --model-name gesture_model \
+  --sequence-length 30 \
+  --feature-dim 200 \
+  --epochs 40 \
+  --batch-size 64
+```
+
+产物：
+- `models/gesture_model.pt`（运行时默认模型）
+- `models/gesture_model.ts`（TorchScript）
+- `models/gesture_model_labels.json`（标签索引）
+- `models/gesture_model_metrics.json`（训练指标）
 
 ---
 
@@ -185,7 +203,7 @@ python main.py --config my_config.yaml
 ## 💡 开发建议
 
 ### 性能优化
-1. 使用 GPU 加速 (TensorFlow-GPU)
+1. 使用 GPU 加速 (PyTorch + CUDA)
 2. 降低 `min_sequence_length` 加快响应
 3. 增加 `motion_threshold` 减少计算
 4. 降低视频分辨率 (如 320x240)
@@ -262,7 +280,7 @@ from mediapipe import solutions
 
 **问题：模型加载失败**
 - 验证模型文件路径
-- 检查文件格式是否正确 (.keras)
+- 检查文件格式是否正确 (.pt)
 
 **问题：识别不工作**
 - 检查摄像头是否正常

@@ -53,7 +53,7 @@ class GestureControlSystem:
         self.extractor = FeatureExtractor()
 
         # 初始化分类器
-        model_path = self.config.get('model.path', 'models/gesture_model.keras')
+        model_path = self.config.get('model.path', 'models/gesture_model.pt')
         actions = self.config.get('model.actions', [])
         self.classifier = GestureClassifier(
             model_path=model_path,

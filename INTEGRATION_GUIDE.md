@@ -8,7 +8,7 @@
 
 ```bash
 # 复制模型到项目目录
-cp /path/to/nd_model11.keras models/gesture_model.keras
+cp /path/to/nd_model11.pt models/gesture_model.pt
 
 # 更新配置文件中的模型路径
 # 编辑 src/config/config.yaml 中的 model.path
@@ -23,7 +23,68 @@ cp /path/to/nd_model11.keras models/gesture_model.keras
 # 可从 code.ipynb 中的数据收集单元提取
 ```
 
-### 3. 测试系统
+推荐直接使用仓库内的采集脚本：
+
+```bash
+python scripts/collect_dataset.py \
+  --labels left_swipe,right_swipe,up_swipe,down_swipe,fist_click,open_palm,thumb_up,thumb_down,ok_sign,peace \
+  --sequences-per-label 400 \
+  --sequence-length 30
+```
+
+推荐标签清单（单手）：
+- `left_swipe`
+- `right_swipe`
+- `up_swipe`
+- `down_swipe`
+- `fist_click`
+- `open_palm`
+- `thumb_up`
+- `thumb_down`
+- `ok_sign`
+- `peace`
+
+数据量建议（每个标签，单手）：
+- 最低可用：`>=300` 条序列
+- 推荐上线：`400~800` 条序列
+- 高鲁棒版本：`1000` 条序列
+
+时间预估（10 个标签，30 帧/序列，20FPS）：
+- `400` 条/标签：约 `110~140` 分钟（1.8~2.3 小时）
+- `800` 条/标签：约 `220~280` 分钟（3.7~4.7 小时）
+
+脚本会在启动时自动打印当前参数下的总耗时估算。
+
+### 3. 训练模型（已采集好数据后直接执行）
+
+```bash
+python scripts/train_model.py \
+  --data-dir data/gestures \
+  --output-dir models \
+  --model-name gesture_model \
+  --sequence-length 30 \
+  --feature-dim 200 \
+  --epochs 40 \
+  --batch-size 64
+```
+
+训练完成后会生成：
+- `models/gesture_model.pt`（主 checkpoint，供运行时加载）
+- `models/gesture_model.ts`（TorchScript，便于部署）
+- `models/gesture_model_labels.json`（标签映射）
+- `models/gesture_model_metrics.json`（验证/测试指标）
+
+然后确认 `src/config/config.yaml`：
+```yaml
+model:
+  path: 'models/gesture_model.pt'
+  actions:
+    - 'left_swipe'
+    - 'right_swipe'
+    # ...与 labels.json 保持一致
+```
+
+### 4. 测试系统
 
 ```bash
 # 测试各个组件
@@ -33,14 +94,14 @@ python test_components.py
 python main.py
 ```
 
-### 4. 自定义配置
+### 5. 自定义配置
 
 编辑 `src/config/config.yaml`：
 - 修改支持的手势列表
 - 调整识别参数
 - 配置鼠标/键盘速度
 
-### 5. 扩展功能
+### 6. 扩展功能
 
 #### 添加新手势识别
 
@@ -84,7 +145,7 @@ recognition:
 
 ```bash
 # Copy model to project
-cp /path/to/your_model.keras models/gesture_model.keras
+cp /path/to/your_model.pt models/gesture_model.pt
 ```
 
 ### 2. Test System
@@ -204,7 +265,7 @@ camera:
 
 ```yaml
 model:
-  path: 'models/gesture_model.keras'  # 检查文件是否存在
+  path: 'models/gesture_model.pt'  # 检查文件是否存在
 ```
 
 ### 问题：识别不准确

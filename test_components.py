@@ -52,7 +52,7 @@ def test_gesture_classifier():
     try:
         # 注意：实际运行时需要模型文件存在
         classifier = GestureClassifier(
-            model_path='models/gesture_model.keras',
+            model_path='models/gesture_model.pt',
             actions=['gesture1', 'gesture2'],
             sequence_length=30,
         )

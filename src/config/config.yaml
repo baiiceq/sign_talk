@@ -3,7 +3,7 @@
 
 # ==================== 模型配置 ====================
 model:
-  path: 'models/gesture_model.keras'          # 模型文件路径
+  path: 'models/gesture_model.pt'          # 模型文件路径
   sequence_length: 30                         # 单个序列的帧数
   confidence_threshold: 0.90                  # 预测置信度阈值
   actions:                                    # 支持的手势列表
